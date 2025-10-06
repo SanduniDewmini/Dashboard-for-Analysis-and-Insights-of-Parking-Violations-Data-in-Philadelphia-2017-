@@ -23,4 +23,4 @@ The dashboard helps visualize key statistics and patterns related to parking off
 ## Data Source
 
 - The data used in this dashboard corresponds to Philadelphia Parking Violations (2017).
-- Dataset may be obtained from open data sources such as the Philadelphia Open Data Portal. 
+- Dataset may be obtained from open data sources such as the *Philadelphia Open Data Portal*. 
