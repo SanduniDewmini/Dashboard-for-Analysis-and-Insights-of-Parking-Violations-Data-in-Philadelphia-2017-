@@ -1,0 +1,522 @@
+---
+title: "Tickets issued for parking violations in the city of Philadelphia, Pennsylvania in 2017"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(flexdashboard)
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(magrittr)
+library(lubridate)
+library(dplyr)
+library(viridis)
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+philly <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-03/tickets.csv")
+colnames(philly)
+```
+
+```{r include=FALSE}
+philly <- philly %>%
+  mutate(issue_date = as_date(issue_datetime))
+philly
+```
+
+```{r include=FALSE}
+violations_by_date <- philly %>%
+  group_by(issue_date) %>%
+  summarise(Count = n(),
+            Fines = sum(fine))
+violations_by_date
+
+```
+
+```{r}
+violation_counts <- philly %>%
+  group_by(violation_desc) %>%
+  summarize(count = n(),
+            Fines = sum(fine)) %>%
+  arrange(desc(count))
+```
+
+```{r}
+violation_agencies <- philly %>%
+  group_by(issuing_agency) %>%
+  summarize(count = n(),
+            Fines = sum(fine)) %>%
+  arrange(desc(count))
+```
+
+# Overview
+
+
+## Column {data-width=400}
+-----------------------------------------------------------------------
+
+###
+
+```{r}
+total_violations <- 2017
+valueBox(value = 2017, caption  = "Year", icon ="fa-calander", color = "orange")
+```
+
+###
+
+```{r}
+total_violations <- nrow(philly)
+valueBox(value = total_violations, caption  = "Total Violations", icon ="fa-pen", color = "yellow")
+```
+
+
+###
+
+```{r}
+total_violations <- nrow(violation_counts)
+valueBox(value = total_violations, caption  = "Number Of Violation Locations", icon ="fa-map", color = "lightgreen")
+```
+
+
+###
+
+```{r}
+library(scales)
+total_fines <- sum(philly$fine, na.rm = TRUE)
+valueBox(value = total_fines, caption  = "Total Revenue ($)", icon ="fa-money" , color = "lightblue")
+```
+
+
+###
+
+```{r}
+total_violations <- nrow(violation_agencies)
+valueBox(value = total_violations, caption  = "Number Of Ticket issued Agencies", icon ="fa-home", color = "purple")
+```
+
+## Column {data-width=750}
+
+### Daily Count of tickets issued in 2017
+
+```{r}
+ggplot(violations_by_date, aes(y = Count, x = issue_date))+geom_line(color = "black")+
+  labs(title = "Violations Over Time", x = "Date", y = "Total Violations")
+```
+
+
+### Daily Total Fines collected by issuing tickets for parking violations in 2017
+
+```{r}
+ggplot(violations_by_date, aes(y = Fines, x = issue_date))+geom_line(color = "black")+
+  labs(title = "Fines Over Time", x = "Issue Date", y = "Total Fines") 
+  
+  
+```
+
+# Violations
+
+## Column {data-width=550}
+-----------------------------------------------------------------------
+
+###
+```{r}
+Max_violations <- max(violations_by_date$Count, na.rm = F)
+date  <- violations_by_date[which.max(violations_by_date$Count),]
+valueBox(value = Max_violations, caption  = "Max Violations 2017-11-16", icon ="fa-pen", color = "yellow")
+```
+###
+```{r}
+Min_violations <- min(violations_by_date$Count, na.rm = F)
+date1 <- violations_by_date[which.min(violations_by_date$Count),]
+valueBox(value = Min_violations, caption  = "Min Violations 2017-12-25", icon ="fa-ticket", color = "lightgreen")
+```
+
+###
+```{r}
+revenue_by_date <- violations_by_date %>%
+  mutate(year = year(issue_date),
+         month = month(issue_date, label = TRUE),
+         day = day(issue_date),
+         weekday = wday(issue_date, label = TRUE, abbr = FALSE))
+# Ensure issue_date is in Date format
+revenue_by_date$issue_date <- as.Date(revenue_by_date$issue_date)
+```
+
+```{r}
+
+# Calculate minimum and maximum counts per month
+revenue_by_date <- revenue_by_date %>%
+  group_by(month) %>%
+  mutate(
+    min_count = min(Count, na.rm = TRUE),
+    max_count = max(Count, na.rm = TRUE),
+    highlight = case_when(
+      Count == min_count ~ "Min",
+      Count == max_count ~ "Max",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Convert issue_date to Date format if it's not already
+revenue_by_date$issue_date <- as.Date(revenue_by_date$issue_date)
+
+# Extract weekday names
+revenue_by_date$weekday <- weekdays(revenue_by_date$issue_date)
+
+# Define the order of weekdays with abbreviated labels
+weekday_labels <- c("Sunday" = "S", "Monday" = "M", "Tuesday" = "T", 
+                    "Wednesday" = "W", "Thursday" = "Th", "Friday" = "F", "Saturday" = "Sa")
+
+# Convert issue_date to Date format if it's not already
+revenue_by_date$issue_date <- as.Date(revenue_by_date$issue_date)
+
+# Extract weekday names and ensure correct order
+revenue_by_date$weekday <- factor(weekdays(revenue_by_date$issue_date), levels = names(weekday_labels))
+
+# Create calendar plot with mapped labels and correct order
+calendar_plot <- ggplot(revenue_by_date, aes(x = weekday, y = week(issue_date), fill = Count)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "D", name = "# Violations") +
+  facet_wrap(~ month, ncol = 3, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Number Of Tickets Issued for Parking Violations in 2017",
+    x = "Day of Week",
+    y = "Week of Year"
+  ) +
+  geom_point(data = filter(revenue_by_date, !is.na(highlight)), 
+             aes(shape = highlight, color = highlight), size = 3, na.rm = TRUE) +
+  scale_shape_manual(
+    name = "Highlights",
+    values = c("Min" = 16, "Max" = 17),
+    labels = c("Min" = "Minimum Violations", "Max" = "Maximum Violations")
+  ) +
+  scale_color_manual(
+    name = "Highlights",
+    values = c("Min" = "red", "Max" = "black"),
+    labels = c("Min" = "Minimum Violations", "Max" = "Maximum Violations")
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 5))) +  # Adjust legend point size
+  scale_x_discrete(labels = weekday_labels)
+
+
+M <- print(calendar_plot)
+
+# Convert to interactive plot with ggplotly
+M_interactive <- ggplotly(M, tooltip = c("x", "y", "fill"))
+
+# Remove unwanted shapes by tweaking plotly settings
+M_interactive <- M_interactive %>%
+  style(
+    visible = ifelse(is.na(revenue_by_date$highlight), FALSE, TRUE),  # Set visibility based on highlight
+    traces = c(2:length(M_interactive$x$data))  # Adjust trace numbers if necessary
+  ) %>%
+  layout(
+    legend = list(
+      title = list(text = "Highlights"),
+      orientation = 'v',
+      x = 1.05,  # Adjust x position as needed
+      y = 0.5  # Adjust y position to place legend below the plot
+    )
+  )
+
+# Print interactive plot with legend at the bottom
+M_interactive
+```
+
+## Column {data-width=450}
+-----------------------------------------------------------------------
+
+### Violations by Location
+
+```{r}
+violation_counts <- philly %>%
+  group_by(violation_desc) %>%
+  summarize(count = n(),
+            Fines = sum(fine)) %>%
+  arrange(desc(count))
+```
+
+
+```{r}
+violation_centroids <- philly %>%
+  group_by(violation_desc) %>%
+  summarize(
+    count = n(),
+    Fines = sum(fine),
+    avg_latitude = mean(lat, na.rm = TRUE),
+    avg_longitude = mean(lon, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(count))
+
+```
+
+```{r}
+library(leaflet.extras)
+# Heatmap
+leaflet(violation_centroids) %>%
+  addTiles() %>%
+  addHeatmap(
+    lng = ~avg_longitude, lat = ~avg_latitude,
+    intensity = ~count, blur = 20, max = 0.05,
+    radius = 15
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    colors = c("blue", "green", "yellow", "red"),
+    labels = c("Low", "Medium", "High", "Very High"),
+    title = "Violation Density"
+  )
+
+```
+
+### Number Of Tickets issued by Agencies
+
+```{r}
+library(RColorBrewer)
+
+dark_palette <- c("blue", "green", "yellow", "purple", "red", "brown", "#1C2833", "grey", "orange", "#1F618D")
+
+H <- ggplot(violation_agencies, aes(x = reorder(issuing_agency, -log10(count)), y = log10(count), fill = issuing_agency)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = dark_palette) +
+  labs(title = "Number of Tickets issued by Agencies", x = "Issued Agency", y = "Log10(Count)") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    panel.background = element_rect(fill = "lightblue"), # Change this to your desired color
+    plot.background = element_rect(fill = "white"),      # Change this to your desired color
+    panel.grid.major = element_line(color = "grey80"),   # Adjust major grid lines
+    panel.grid.minor = element_line(color = "grey90")    # Adjust minor grid lines
+  ) 
+ggplotly(H)
+```
+
+# Revenues
+
+## Column {data-width=600}
+-----------------------------------------------------------------------
+
+###
+```{r}
+library(scales)
+Max_fines <- max(violations_by_date$Fines, na.rm = TRUE)
+date2 <- violations_by_date[which.max(violations_by_date$Fines),]
+valueBox(value = Max_fines, caption  = "Max Revenue ($) 2017-11-16", icon ="fa-money", color = "red")
+```
+
+###
+```{r}
+Min_fines <- min(violations_by_date$Fines, na.rm = F)
+date3 <- violations_by_date[which.min(violations_by_date$Fines),]
+valueBox(value = Min_fines, caption  = "Min Revenue ($) 2017-12-25", icon ="fa-coin", color = "pink")
+```
+### 
+
+```{r}
+
+# Calculate minimum and maximum counts per month
+revenue_by_date <- revenue_by_date %>%
+  group_by(month) %>%
+  mutate(
+    min_count = min(Count, na.rm = TRUE),
+    max_count = max(Count, na.rm = TRUE),
+    highlight = case_when(
+      Count == min_count ~ "Min",
+      Count == max_count ~ "Max",
+      TRUE ~ NA_character_
+    )
+  )
+
+library(RColorBrewer)
+
+# Define color palette
+palette <- brewer.pal(9, "YlOrRd")
+
+# Define abbreviated weekday labels
+weekday_labels <- c("Sunday" = "S", "Monday" = "M", "Tuesday" = "T", 
+                    "Wednesday" = "W", "Thursday" = "Th", "Friday" = "F", "Saturday" = "Sa")
+
+# Convert issue_date to Date format if it's not already
+revenue_by_date$issue_date <- as.Date(revenue_by_date$issue_date)
+
+# Extract weekday names and map to abbreviated labels
+revenue_by_date$weekday <- factor(weekdays(revenue_by_date$issue_date), levels = names(weekday_labels))
+
+# Create the calendar plot with ggplot
+calendar_plot <- ggplot(revenue_by_date, aes(x = weekday, y = week(issue_date), fill = Fines)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(colors = palette) +
+  facet_wrap(~ month, ncol = 3, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Revenue of Issued Tickets for Parking Violations in 2017",
+    x = "Day of Week",
+    y = "Week of Year"
+  ) +
+  geom_point(data = filter(revenue_by_date, !is.na(highlight)), 
+             aes(shape = highlight, color = highlight), size = 3, na.rm = TRUE) +
+  scale_shape_manual(
+    name = "Highlights",
+    values = c("Min" = 16, "Max" = 17),
+    labels = c("Min" = "Minimum Fine", "Max" = "Maximum Fine")
+  ) +
+  scale_color_manual(
+    name = "Highlights",
+    values = c("Min" = "blue", "Max" = "yellow"),
+    labels = c("Min" = "Minimum Fine", "Max" = "Maximum Fine")
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 5))) +  # Adjust legend point size
+  scale_x_discrete(labels = weekday_labels)  # Map weekday names to abbreviated labels
+
+# Print the ggplot plot
+N <- print(calendar_plot)
+
+# Convert to interactive plot with ggplotly
+N_interactive <- ggplotly(N, tooltip = c("x", "y", "fill"))
+
+# Remove unwanted shapes by tweaking plotly settings
+N_interactive <- N_interactive %>%
+  style(
+    visible = ifelse(is.na(revenue_by_date$highlight), FALSE, TRUE),  # Set visibility based on highlight
+    traces = c(2:length(N_interactive$x$data))  # Adjust trace numbers if necessary
+  ) %>%
+  layout(
+    legend = list(
+      title = list(text = "Highlights"),
+      orientation = 'v',
+      x = 1.03,  # Adjust x position as needed
+      y = 0.5  # Adjust y position to place legend below the plot
+    )
+  )
+
+# Print interactive plot with legend at the bottom
+N_interactive
+
+
+```
+
+## Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Fines by Locations
+
+```{r}
+
+leaflet(violation_centroids) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    ~avg_longitude, ~avg_latitude,
+    radius = ~sqrt(Fines) * 2, # Adjusting radius for better visibility
+    color = ~ifelse(Fines > 500000, 'red', ifelse(Fines > 100000, 'orange', 'blue')),
+    fillOpacity = 0.7,
+    popup = ~paste(
+      "<strong>Violation Type:</strong>", violation_desc,
+      "<br><strong>Fines:</strong>", Fines,
+      "<br><strong>Latitude:</strong>", avg_latitude,
+      "<br><strong>Longitude:</strong>", avg_longitude
+    ),
+    clusterOptions = markerClusterOptions() # Enables marker clustering
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    colors = c("blue", "orange", "red"),
+    labels = c("$0.1M>", "$0.5M>", "$0.5M<"),
+    title = "Total Fines"
+  )
+```
+
+### Fines by Agencies
+
+```{r}
+
+# Define an extended dark color palette
+dark_palette <- c("blue", "green", "yellow", "purple", "red", "brown", "#1C2833", "grey", "orange", "#1F618D")
+
+G <- ggplot(violation_agencies, aes(x = reorder(issuing_agency, -Fines), y = Fines, fill = issuing_agency)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = dark_palette) +
+  labs(title = "Total Fines collected by Agencies", x = "Issued Agency", y = "Total Revenue (log scale)") +
+  scale_y_log10(breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    panel.background = element_rect(fill = "lightblue"), # Change this to your desired color
+    plot.background = element_rect(fill = "white"),      # Change this to your desired color
+    panel.grid.major = element_line(color = "grey80"),   # Adjust major grid lines
+    panel.grid.minor = element_line(color = "grey90")    # Adjust minor grid lines
+  ) 
+
+ggplotly(G)
+```
+# Data Sources
+
+## Column {data-width=500}
+
+###
+
+```{r}
+datatable(revenue_by_date,
+          extensions = 'Buttons',
+          options = list(
+            dom = 'Bfrtip',
+            buttons = c('copy','print','csv')
+            
+          ))
+```
+
+## Column {data-width=500}
+
+###
+
+```{r}
+datatable(violation_counts,
+          extensions = 'Buttons',
+          options = list(
+            dom = 'Bfrtip',
+            buttons = c('copy','print','csv')
+            
+          ))
+```
+
+###
+
+
+```{r}
+datatable(violation_agencies,
+          extensions = 'Buttons',
+          options = list(
+            dom = 'Bfrtip',
+            buttons = c('copy','print','csv')
+            
+          ))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
