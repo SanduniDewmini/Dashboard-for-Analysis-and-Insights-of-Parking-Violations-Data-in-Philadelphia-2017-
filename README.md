@@ -20,8 +20,7 @@ The dashboard helps visualize key statistics and patterns related to parking off
 - **dplyr**
 - **plotly** *(optional if used)*
 
-## How to Run
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/your-username/Dashboard-for-Analysis-and-Insights-of-Parking-Violations-Data-in-Philadelphia-2017.git
-``` 
+## Data Source
+
+- The data used in this dashboard corresponds to Philadelphia Parking Violations (2017).
+- Dataset may be obtained from open data sources such as the Philadelphia Open Data Portal. 
